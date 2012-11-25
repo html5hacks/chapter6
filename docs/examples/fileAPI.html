@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>HTML5 Hacks: Data and Storage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Le styles -->
+    <link href="../assets/css/bootstrap.css" rel="stylesheet">
+    <style>
+      body {
+        padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
+      }
+    </style>
+    <link href="../assets/css/bootstrap-responsive.css" rel="stylesheet">
+
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <!-- Le fav and touch icons -->
+    <link rel="shortcut icon" href="../assets/ico/favicon.ico">
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="../assets/ico/apple-touch-icon-144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="../assets/ico/apple-touch-icon-114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="../assets/ico/apple-touch-icon-72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="../assets/ico/apple-touch-icon-57-precomposed.png">
+  </head>
+
+  <body onload="init()">
+
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          <a class="brand" href="/">HTML5 Hacks: Data and Storage</a>
+          <div class="nav-collapse">
+            <ul class="nav">
+              <li><a href="./dataurls.html">Data URLs</a></li>
+              <li><a href="./blob.html">Blobs</a></li>
+              <li><a href="./webstorage.html">Web Storage</a></li>
+              <li class="active"><a href="./fileAPI.html">FileAPI</a></li>
+              <li><a href="./indexeddb.html">IndexedDB</a></li> 
+              <li><a href="./indexeddbpolyfill.html">IndexedDB polyfill</a></li>                           
+            </ul>
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+
+      <button id="testButton">Test</button>
+
+      <div id="images"></div>
+
+    </div> <!-- /container -->
+
+    <!-- Le javascript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+
+
+    <script type="text/javascript">
+      
+      var resourceURL = "resources.zip";
+      var resourceDIRLOC = "resources";
+      var fileSystem;
+      var resourceDIR;
+
+      function errorHandler(e) {
+        var msg = '';
+          console.dir(e);
+        switch (e.code) {
+          case FileError.QUOTA_EXCEEDED_ERR:
+            msg = 'QUOTA_EXCEEDED_ERR';
+            break;
+          case FileError.NOT_FOUND_ERR:
+            msg = 'NOT_FOUND_ERR';
+            break;
+          case FileError.SECURITY_ERR:
+            msg = 'SECURITY_ERR';
+            break;
+          case FileError.INVALID_MODIFICATION_ERR:
+            msg = 'INVALID_MODIFICATION_ERR';
+            break;
+          case FileError.INVALID_STATE_ERR:
+            msg = 'INVALID_STATE_ERR';
+            break;
+          default:
+            msg = 'Unknown Error';
+            break;
+        };
+
+        console.log('Error: ' + msg);
+      }
+
+      function fetchResource() {
+        var xhr = new XMLHttpRequest();
+        xhr.responseType="arraybuffer";
+        xhr.open("GET", resourceURL,true);
+        xhr.onload = function(e) {
+          if(this.status == 200) {
+            console.log("The last mod for the zip is "+this.getResponseHeader("Last-Modified"));
+            //store the last mod for this file
+            localStorage["resourceLastModified"] = this.getResponseHeader("Last-Modified");
+
+            var bb = new WebKitBlobBuilder();
+
+            bb.append(this.response);
+
+            var blob = bb.getBlob("application/zip");
+
+            zip.workerScriptsPath = "../assets/zip/";
+
+            zip.createReader(new zip.BlobReader(blob), function(reader) {
+              console.log("opened zip");
+
+              reader.getEntries(function(entries) {
+
+                  entries.forEach(function(entry) {
+                    console.log(entry.filename+' '+entry.uncompressedSize);
+                    resourceDIR.getFile(entry.filename, {create:true}, function(file) {
+                      console.log("Yes, I opened "+file.fullPath);
+                      entry.getData(new zip.FileWriter(file), function(e) {
+
+                        }, function(current, total) {
+                        // onprogress callback
+                        });
+
+                    });
+                  });
+
+              });
+            }, function(err) {
+              console.log("zip reader error!");
+              console.dir(err);
+            })
+          }
+        }
+        xhr.send();
+      }
+
+      function init() {
+
+        if(!window.webkitStorageInfo) return;
+
+        window.webkitStorageInfo.requestQuota(window.PERSISTENT, 20*1024*1024, function(grantedBytes) {
+          console.log("I was granted "+grantedBytes+" bytes.");
+
+          window.webkitRequestFileSystem(window.PERSISTENT, grantedBytes, onInitFs, errorHandler);
+        }, errorHandler);
+
+        function onInitFs(fs) {
+          fileSystem = fs;
+
+          fileSystem.root.getDirectory(fs.root.fullPath + '/' + resourceDIRLOC, {create:true}, function(dir) {
+            resourceDIR = dir;
+
+            //So we have our resource folder. To determine if our copy is in sync, we check localStorage and compare it to the remote file
+
+            if(localStorage["resourceLastModified"]) {
+              console.log("I had a localStorage value for resourceLastModified, it was "+localStorage["resourceLastModified"]);
+
+              var xhr = new XMLHttpRequest();
+              xhr.open("HEAD", resourceURL );
+              xhr.onload = function(e) {
+                if(this.status == 200) {
+                  if(this.getResponseHeader("Last-Modified") != localStorage["resourceLastModified"]) {
+                    fetchResource();
+                  } else {
+                    console.log("Not fetching the zip, my copy is kosher.");
+                  }
+                }
+              }
+              xhr.send();
+            } else {
+              fetchResource();
+            }
+
+          },errorHandler);
+        }
+
+        document.querySelector("#testButton").addEventListener("click", function() {
+                //Attempt to draw our images that exist in the file system
+                //If they exist, we draw from there, if not, we do not display them.
+
+                var images = ["bobapony.jpg","buy bacon.jpg","cool boba.jpg","chuck-norris.jpg"];
+                for(var i=0, len=images.length; i<len; i++) {
+                    var thisImage = images[i];
+                    resourceDIR.getFile(thisImage, {create:false}, function(file) {
+                        console.log("In success handler for "+file.name + " " + file.toURL());
+                        document.querySelector("#images").innerHTML += "<img src='"+file.toURL() + "'><br/>";
+                    });
+                }
+
+        }, false);
+      
+      };
+
+
+    </script>
+
+    <script src="../assets/zip/zip.js"></script>  
+    <script src="../assets/zip/deflate.js"></script>
+    <script src="../assets/js/jquery.js"></script>
+    <script src="../assets/js/bootstrap-transition.js"></script>
+    <script src="../assets/js/bootstrap-alert.js"></script>
+    <script src="../assets/js/bootstrap-modal.js"></script>
+    <script src="../assets/js/bootstrap-dropdown.js"></script>
+    <script src="../assets/js/bootstrap-scrollspy.js"></script>
+    <script src="../assets/js/bootstrap-tab.js"></script>
+    <script src="../assets/js/bootstrap-tooltip.js"></script>
+    <script src="../assets/js/bootstrap-popover.js"></script>
+    <script src="../assets/js/bootstrap-button.js"></script>
+    <script src="../assets/js/bootstrap-collapse.js"></script>
+    <script src="../assets/js/bootstrap-carousel.js"></script>
+    <script src="../assets/js/bootstrap-typeahead.js"></script>
+
+  </body>
+</html>

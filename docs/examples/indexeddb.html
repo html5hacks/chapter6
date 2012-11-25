@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>HTML5 Hacks: Data and Storage</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Le styles -->
+    <link href="../assets/css/bootstrap.css" rel="stylesheet">
+    <style>
+      body {
+        padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
+      }
+    </style>
+    <link href="../assets/css/bootstrap-responsive.css" rel="stylesheet">
+    <link href="../assets/css/datepicker.css" rel="stylesheet">
+    <link href="../assets/css/fullcalendar.css" rel="stylesheet">
+
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <!-- Le fav and touch icons -->
+    <link rel="shortcut icon" href="../assets/ico/favicon.ico">
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="../assets/ico/apple-touch-icon-144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="../assets/ico/apple-touch-icon-114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="../assets/ico/apple-touch-icon-72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="../assets/ico/apple-touch-icon-57-precomposed.png">
+
+    <script src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
+  </head>
+
+  <body>
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          <a class="brand" href="/">HTML5 Hacks: Data and Storage</a>
+          <div class="nav-collapse">
+            <ul class="nav">
+              <li><a href="./dataurls.html">Data URLs</a></li>
+              <li><a href="./blob.html">Blobs</a></li>
+              <li><a href="./webstorage.html">Web Storage</a></li>
+              <li><a href="./FileAPI.html">FileAPI</a></li>
+              <li class="active"><a href="./indexeddb.html">IndexedDB</a></li> 
+              <li><a href="./indexeddbpolyfill.html">IndexedDB polyfill</a></li> 
+            </ul>
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+
+      <section id="forms">
+        <h2>IndexedDB</h2>
+        <div class="row">
+          <div class="span8">
+            <h3>Calendar</h3>
+            <div id='calendar'></div>
+          </div>
+          <div class="span4">
+            <form>
+              <fieldset>
+
+                <div class="control-group">
+                  <label class="control-label">Add a Milestone</label>
+                  <div class="controls">
+                     <h2>New Milestone</h2>
+                        <input type="text" name="title" value="">
+                        <input type="text" class="span2" name="start" value="07/16/12" data-date-format="mm/dd/yy" id="dp1" >
+                        <input type="text" class="span2" name="end" value="07/17/12" data-date-format="mm/dd/yy" id="dp2" >
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Save</button>
+                  <button class="btn">Cancel</button>
+                </div>
+
+              </fieldset>
+            </form>
+          </div>
+        </div><!-- /row -->
+      </section>
+
+    </div> <!-- /container -->
+
+
+<script type="text/javascript">
+
+var html5hacks = {};
+html5hacks.msArray = [];
+
+var indexedDB = window.indexedDB || window.webkitIndexedDB ||
+                window.mozIndexedDB;
+
+  $(function(){
+    $('#dp1').datepicker();
+    $('#dp2').datepicker();
+  });
+
+if ('webkitIndexedDB' in window) {
+  window.IDBTransaction = window.webkitIDBTransaction;
+  window.IDBKeyRange = window.webkitIDBKeyRange;
+}
+
+html5hacks.indexedDB = {};
+html5hacks.indexedDB.db = null;
+
+html5hacks.indexedDB.onerror = function(e) {
+  console.log(e);
+};
+
+html5hacks.indexedDB.open = function() {
+  var request = indexedDB.open("milestones");
+
+  request.onsuccess = function(e) {
+    var v = "1";
+    html5hacks.indexedDB.db = e.target.result;
+
+    var db = html5hacks.indexedDB.db;
+
+    if (v!= db.version) {
+      var setVrequest = db.setVersion(v);
+      setVrequest.onerror = html5hacks.indexedDB.onerror;
+
+      setVrequest.onsuccess = function(e) {
+        if(db.objectStoreNames.contains("milestone")) {
+          db.deleteObjectStore("milestone");
+        }
+
+        var store = db.createObjectStore("milestone",
+          {keyPath: "timeStamp"});
+
+        html5hacks.indexedDB.init();
+      };
+    }
+    else {
+      html5hacks.indexedDB.init();
+    }
+  };
+  request.onerror = html5hacks.indexedDB.onerror;
+}
+
+html5hacks.indexedDB.addMilestone = function(d) {
+  var db = html5hacks.indexedDB.db;
+  var trans = db.transaction(["milestone"], IDBTransaction.READ_WRITE);
+  var store = trans.objectStore("milestone");
+
+  var data = {
+    "title": d[0].value,
+    "start": d[1].value,
+    "end": d[2].value,
+    "timeStamp": new Date().getTime()
+  };
+
+  var request = store.put(data);
+
+  var dataArr = [data]
+  request.onsuccess = function(e) {
+    $('#calendar').fullCalendar('addEventSource', dataArr);
+  };
+
+  request.onerror = function(e) {
+    console.log("Error Adding: ", e);
+  };
+};
+
+html5hacks.indexedDB.deleteMilestone = function(id) {
+  var db = html5hacks.indexedDB.db;
+  var trans = db.transaction(["milestone"], IDBTransaction.READ_WRITE);
+  var store = trans.objectStore("milestone");
+
+  var request = store.delete(id);
+
+  request.onsuccess = function(e) {
+    html5hacks.indexedDB.getAllMilestoneItems();
+  };
+
+  request.onerror = function(e) {
+    console.log("Error Adding: ", e);
+  };
+};
+
+html5hacks.indexedDB.getAllMilestoneItems = function() {
+
+  console.log("getAllMilestoneItems")
+  var milestones = document.getElementById("milestoneItems");
+  milestones.innerHTML = "";
+
+  var db = html5hacks.indexedDB.db;
+  var trans = db.transaction(["milestone"], IDBTransaction.READ_WRITE);
+  var store = trans.objectStore("milestone");
+
+  // Get everything in the store;
+  var keyRange = IDBKeyRange.lowerBound(0);
+  var cursorRequest = store.openCursor(keyRange);
+
+  cursorRequest.onsuccess = function(e) {
+    var result = e.target.result;
+    if(!!result == false)
+
+      return;
+
+      // renderMilestone(result.value);
+      console.log(result.value);
+      buildMilestoneArray(result.value);
+      result.continue();
+  };
+
+  cursorRequest.onerror = html5hacks.indexedDB.onerror;
+};
+
+html5hacks.indexedDB.init = function() {
+  console.log("init")
+   // var milestones = document.getElementById("milestoneItems");
+  // milestones.innerHTML = "";
+
+  var db = html5hacks.indexedDB.db;
+  var trans = db.transaction(["milestone"], IDBTransaction.READ_WRITE);
+  var store = trans.objectStore("milestone");
+
+  // Get everything in the store;
+  var keyRange = IDBKeyRange.lowerBound(0);
+  var cursorRequest = store.openCursor(keyRange);
+
+  cursorRequest.onsuccess = function(e) {
+    var result = e.target.result;
+    if(!!result == false){
+    
+        $('#calendar').fullCalendar({
+          header: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'month,agendaWeek,agendaDay'
+          },
+          weekmode: 'variable',
+          height: 400,
+          editable: true,
+          events: html5hacks.msArray
+        });
+
+      return;
+
+    }else{
+
+      console.log("result.value" , result.value);
+      buildMilestoneArray(result.value);
+      result.continue();
+    }
+  };
+  cursorRequest.onerror = html5hacks.indexedDB.onerror;
+};
+
+function buildMilestoneArray(ms) {
+  html5hacks.msArray.push(ms);
+  console.log("building array" , html5hacks.msArray)
+}
+
+  $('form').submit(function() {
+    var data = $(this).serializeArray();
+    // console.log(data);
+    html5hacks.indexedDB.addMilestone(data);
+    return false;
+  });
+
+function init() {
+  html5hacks.indexedDB.open();
+}
+
+init();
+
+</script>
+
+    <!-- Le javascript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="../assets/js/jquery.js"></script>
+    <script src="../assets/js/bootstrap-transition.js"></script>
+    <script src="../assets/js/bootstrap-alert.js"></script>
+    <script src="../assets/js/bootstrap-modal.js"></script>
+    <script src="../assets/js/bootstrap-dropdown.js"></script>
+    <script src="../assets/js/bootstrap-scrollspy.js"></script>
+    <script src="../assets/js/bootstrap-tab.js"></script>
+    <script src="../assets/js/bootstrap-tooltip.js"></script>
+    <script src="../assets/js/bootstrap-popover.js"></script>
+    <script src="../assets/js/bootstrap-button.js"></script>
+    <script src="../assets/js/bootstrap-collapse.js"></script>
+    <script src="../assets/js/bootstrap-carousel.js"></script>
+    <script src="../assets/js/bootstrap-typeahead.js"></script>
+    <script src="../assets/js/bootstrap-datepicker.js"></script>
+    <script src="../assets/js/fullcalendar.min.js"></script>
+
+
+  </body>
+</html>
+
+
